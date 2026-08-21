@@ -1,0 +1,32 @@
+{
+  "apps": [
+    {
+      "name": "L-Acoustics Soundvision",
+      "check_url": "https://www.l-acoustics.com/software/soundvision",
+      "version_regex": "20\\d{2}\\.\\d+\\.\\d+",
+      "mac_download_regex": "href=\"(https://[^\"]*/Soundvision/Soundvision/Mac/[^\"]+\\.zip)\"",
+      "win_download_regex": "href=\"(https://[^\"]*/Soundvision/Soundvision/Windows/[^\"]+\\.zip)\""
+    },
+    {
+      "name": "L-Acoustics Network Manager",
+      "check_url": "https://www.l-acoustics.com/products/network-manager/",
+      "version_regex": "20\\d{2}\\.\\d+\\.\\d+",
+      "mac_download_regex": null,
+      "win_download_regex": null
+    },
+    {
+      "name": "Shure Wireless Workbench (WWB)",
+      "check_url": "https://www.shure.com/nl-BE/producten/software/wwb?variant=WWB",
+      "version_regex": "versionNumber\":\\{\"value\":\"([\\d.]+)\"",
+      "mac_download_regex": null,
+      "win_download_regex": null
+    },
+    {
+      "name": "Green-GO Control",
+      "check_url": "https://www.greengocom.com/software-products/control",
+      "version_regex": "downloads\\.greengoconnect\\.com/([\\d.]+)/",
+      "mac_download_regex": "href=\"(https://downloads\\.greengoconnect\\.com/[\\d.]+/macos/[^\"]+\\.dmg)\"",
+      "win_download_regex": "href=\"(https://downloads\\.greengoconnect\\.com/[\\d.]+/windows/[^\"]+\\.msi)\""
+    }
+  ]
+}

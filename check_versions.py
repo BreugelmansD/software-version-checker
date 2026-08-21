@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""Check for new versions of entertainment-industry software without in-app updaters.
+"""Fetch the latest available version + download links for the shared app catalog.
 
-Shared app catalog lives in apps.json (checked into git). Each person's own
-installed versions live in local_versions.json (gitignored, machine-local).
+Writes latest.json (public, committed to the repo, served by GitHub Pages
+alongside index.html). This script runs on a schedule via GitHub Actions
+(--ci flag), so nobody needs to install or run anything to see the shared
+dashboard at the Pages URL.
+
+Optional/advanced: if you want a desktop notification on your own machine
+when an update appears, keep a local_versions.json (gitignored) with your
+installed versions and run this script locally (see setup_macos.sh /
+setup_windows.ps1).
 
 Usage:
-  python3 check_versions.py                  # check all apps, update dashboard, notify on updates
-  python3 check_versions.py --setup          # interactive: enter your installed version per app
+  python3 check_versions.py            # fetch + write latest.json, notify locally if configured
+  python3 check_versions.py --ci       # fetch + write latest.json only, no local notification
+  python3 check_versions.py --setup    # (optional) enter your installed version per app, for local notifications
   python3 check_versions.py --set "Shure Wireless Workbench (WWB)" 7.8.3
-                                               # record the version you currently have installed
-  python3 check_versions.py --no-notify       # check + dashboard, skip desktop notification
 """
 import json
 import platform
@@ -23,8 +29,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 APPS_PATH = BASE_DIR / "apps.json"
 LOCAL_VERSIONS_PATH = BASE_DIR / "local_versions.json"
-DASHBOARD_PATH = BASE_DIR / "dashboard.html"
-LOG_PATH = BASE_DIR / "last_check.log"
+LATEST_PATH = BASE_DIR / "latest.json"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -65,15 +70,13 @@ def extract(html, pattern):
     return match.group(1) if match.groups() else match.group(0)
 
 
-def check_app(app, installed_version):
+def check_app(app):
     result = {
         "name": app["name"],
         "check_url": app["check_url"],
-        "installed_version": installed_version,
         "latest_version": None,
         "download_mac": None,
         "download_win": None,
-        "status": "unknown",
         "error": None,
     }
     try:
@@ -83,17 +86,8 @@ def check_app(app, installed_version):
             raise ValueError("version pattern not found on page")
         result["download_mac"] = extract(html, app.get("mac_download_regex"))
         result["download_win"] = extract(html, app.get("win_download_regex"))
-    except Exception as exc:  # noqa: BLE001 - surface any fetch/parse failure in the dashboard
-        result["status"] = "error"
+    except Exception as exc:  # noqa: BLE001 - surface any fetch/parse failure on the page
         result["error"] = str(exc)
-        return result
-
-    if not installed_version:
-        result["status"] = "no_baseline"
-    elif version_tuple(installed_version) < version_tuple(result["latest_version"]):
-        result["status"] = "update_available"
-    else:
-        result["status"] = "up_to_date"
     return result
 
 
@@ -112,114 +106,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
 """
             subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=False, timeout=10)
     except Exception:
-        pass  # notification is best-effort; the dashboard remains the source of truth
-
-
-STATUS_LABEL = {
-    "update_available": ("Update beschikbaar", "filled", "#c2680d"),
-    "up_to_date": ("Up-to-date", "filled", "#0f6f6b"),
-    "no_baseline": ("Geen versie ingesteld", "outline", None),
-    "error": ("Check mislukt", "filled", "#dc2626"),
-}
-
-
-def render_dashboard(results, checked_at):
-    rows = []
-    n_updates = sum(1 for r in results if r["status"] == "update_available")
-
-    for r in results:
-        label, variant, color = STATUS_LABEL[r["status"]]
-        installed = r["installed_version"] or "—"
-        latest = r["latest_version"] or "—"
-        detail = f'<div class="error">{r["error"]}</div>' if r["error"] else ""
-        badge_style = f'background:{color};color:#fff;' if variant == "filled" else ""
-        badge = f'<span class="badge {variant}" style="{badge_style}">{label}</span>'
-        action = ""
-        if r["status"] == "update_available":
-            args = ", ".join(json.dumps(v or "") for v in (r["check_url"], r["download_mac"], r["download_win"]))
-            action = f'<button class="update-btn" onclick=\'handleUpdate({args})\'>Updaten →</button>'
-
-        rows.append(f"""
-        <tr>
-          <td class="name"><a href="{r['check_url']}" target="_blank" rel="noopener">{r['name']}</a></td>
-          <td>{installed}</td>
-          <td>{latest}</td>
-          <td>{badge}{detail}</td>
-          <td>{action}</td>
-        </tr>""")
-
-    html = f"""<!doctype html>
-<html lang="nl">
-<head>
-<meta charset="utf-8">
-<title>Software Version Checker</title>
-<style>
-  :root {{
-    --brand:#0f6f6b; --brand-dark:#0b5b58;
-    --bg:#eef3f4; --card:#ffffff; --text:#152224; --muted:#5f7679; --border:#dfe7e8;
-    --thead-bg:#eaf3f3;
-  }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --bg:#0b1516; --card:#101c1d; --text:#e6f1f1; --muted:#89a3a5; --border:#203435; --thead-bg:#132322; }}
-  }}
-  * {{ box-sizing:border-box; }}
-  body {{ margin:0; background:var(--bg); color:var(--text);
-          font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }}
-  .topbar {{ background:var(--brand); color:#fff; padding:16px 32px; display:flex;
-             align-items:baseline; justify-content:space-between; }}
-  .topbar h1 {{ font-size:18px; margin:0; font-weight:600; }}
-  .topbar .subtitle {{ font-size:12px; opacity:.85; }}
-  .content {{ max-width:1000px; margin:0 auto; padding:28px 24px 40px; }}
-  table {{ width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border);
-           border-radius:12px; overflow:hidden; }}
-  th, td {{ text-align:left; padding:12px 16px; font-size:14px; border-bottom:1px solid var(--border); }}
-  th {{ background:var(--thead-bg); color:var(--muted); font-weight:600; font-size:12px;
-        text-transform:uppercase; letter-spacing:.04em; }}
-  tr:last-child td {{ border-bottom:none; }}
-  .name a {{ color:var(--text); text-decoration:none; font-weight:600; }}
-  .name a:hover {{ text-decoration:underline; }}
-  .badge {{ display:inline-block; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700;
-            text-transform:uppercase; letter-spacing:.03em; }}
-  .badge.outline {{ background:transparent; color:var(--muted); border:1px solid var(--border); }}
-  .error {{ color:#dc2626; font-size:11px; margin-top:4px; }}
-  .update-btn {{ display:inline-block; padding:6px 14px; border-radius:999px; background:var(--brand);
-                  color:#fff; font-size:13px; font-weight:600; border:none; cursor:pointer; white-space:nowrap;
-                  font-family:inherit; }}
-  .update-btn:hover {{ background:var(--brand-dark); }}
-  footer {{ margin-top:20px; color:var(--muted); font-size:12px; }}
-</style>
-</head>
-<body>
-  <div class="topbar">
-    <h1>Software Version Checker</h1>
-    <div class="subtitle">Laatst gecontroleerd: {checked_at} · {n_updates} update(s) beschikbaar</div>
-  </div>
-  <div class="content">
-    <table>
-      <thead><tr><th>Applicatie</th><th>Geïnstalleerd</th><th>Laatste versie</th><th>Status</th><th></th></tr></thead>
-      <tbody>{"".join(rows)}</tbody>
-    </table>
-    <footer>Genereer opnieuw met <code>python3 check_versions.py</code>. Versie instellen met <code>python3 check_versions.py --setup</code>.</footer>
-  </div>
-  <script>
-    function handleUpdate(pageUrl, macUrl, winUrl) {{
-      window.open(pageUrl, "_blank", "noopener");
-      var isMac = /Macintosh/.test(navigator.userAgent);
-      var fileUrl = isMac ? macUrl : winUrl;
-      if (fileUrl) {{
-        var a = document.createElement("a");
-        a.href = fileUrl;
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }}
-    }}
-  </script>
-</body>
-</html>
-"""
-    DASHBOARD_PATH.write_text(html)
+        pass  # best-effort only
 
 
 def run_setup():
@@ -237,7 +124,7 @@ def run_setup():
         if value:
             local[name] = value
     save_local_versions(local)
-    print("\nOpgeslagen. Draai nu 'python3 check_versions.py' om te controleren op updates.")
+    print("\nOpgeslagen.")
 
 
 def run_set(name, version):
@@ -255,7 +142,8 @@ def run_set(name, version):
 
 def main():
     args = sys.argv[1:]
-    notify = "--no-notify" not in args
+    ci_mode = "--ci" in args
+    notify = "--no-notify" not in args and not ci_mode
 
     if "--setup" in args:
         run_setup()
@@ -271,25 +159,22 @@ def main():
         return run_set(name, version)
 
     apps = load_apps()
-    local = load_local_versions()
-    results = [check_app(app, local.get(app["name"])) for app in apps]
-    checked_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    results = [check_app(app) for app in apps]
+    checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    render_dashboard(results, checked_at)
+    LATEST_PATH.write_text(json.dumps({"checked_at": checked_at, "apps": results}, indent=2) + "\n")
+    for r in results:
+        print(f"{r['name']}: latest={r['latest_version']}" + (f" (error: {r['error']})" if r["error"] else ""))
 
-    updates = [r for r in results if r["status"] == "update_available"]
-    log_lines = [
-        f"[{checked_at}] {r['name']}: {r['status']} (installed={r['installed_version']}, latest={r['latest_version']})"
-        for r in results
-    ]
-    LOG_PATH.write_text("\n".join(log_lines) + "\n")
-
-    for line in log_lines:
-        print(line)
-
-    if updates and notify:
-        names = ", ".join(u["name"] for u in updates)
-        notify_desktop("Software update beschikbaar", names)
+    if notify:
+        local = load_local_versions()
+        updates = []
+        for r in results:
+            installed = local.get(r["name"])
+            if installed and r["latest_version"] and version_tuple(installed) < version_tuple(r["latest_version"]):
+                updates.append(r["name"])
+        if updates:
+            notify_desktop("Software update beschikbaar", ", ".join(updates))
 
     return 0
 

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software Version Checker</title>
+<style>
+  :root {
+    --brand:#0f6f6b; --brand-dark:#0b5b58;
+    --bg:#eef3f4; --card:#ffffff; --text:#152224; --muted:#5f7679; --border:#dfe7e8;
+    --thead-bg:#eaf3f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b1516; --card:#101c1d; --text:#e6f1f1; --muted:#89a3a5; --border:#203435; --thead-bg:#132322; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+  .topbar { background:var(--brand); color:#fff; padding:16px 32px; display:flex;
+            align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+  .topbar h1 { font-size:18px; margin:0; font-weight:600; }
+  .topbar .subtitle { font-size:12px; opacity:.85; }
+  .content { max-width:1100px; margin:0 auto; padding:28px 24px 40px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border);
+          border-radius:12px; overflow:hidden; }
+  th, td { text-align:left; padding:12px 16px; font-size:14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  th { background:var(--thead-bg); color:var(--muted); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td { border-bottom:none; }
+  .name a { color:var(--text); text-decoration:none; font-weight:600; }
+  .name a:hover { text-decoration:underline; }
+  .version-input { width:110px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+                    font-size:13px; background:var(--card); color:var(--text); font-family:inherit; }
+  .version-input:focus { outline:2px solid var(--brand); outline-offset:1px; }
+  .badge { display:inline-block; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700;
+           text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .badge.outline { background:transparent; color:var(--muted); border:1px solid var(--border); }
+  .error { color:#dc2626; font-size:11px; margin-top:4px; }
+  .update-btn { display:inline-block; padding:6px 14px; border-radius:999px; background:var(--brand);
+                color:#fff; font-size:13px; font-weight:600; border:none; cursor:pointer; white-space:nowrap;
+                font-family:inherit; }
+  .update-btn:hover { background:var(--brand-dark); }
+  .hint { font-size:11px; color:var(--muted); margin-top:2px; }
+  footer { margin-top:20px; color:var(--muted); font-size:12px; }
+  .loading { padding:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Software Version Checker</h1>
+    <div class="subtitle" id="subtitle">Laden…</div>
+  </div>
+  <div class="content">
+    <table id="app-table" style="display:none;">
+      <thead>
+        <tr><th>Applicatie</th><th>Jouw versie</th><th>Laatste versie</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody id="app-rows"></tbody>
+    </table>
+    <div class="loading" id="loading">Bezig met laden van de laatste versies…</div>
+    <footer>
+      Jouw versie wordt lokaal in je browser onthouden (niet gedeeld). De "laatste versie"-kolom wordt wekelijks
+      automatisch vernieuwd.
+    </footer>
+  </div>
+
+<script>
+  const STATUS_LABEL = {
+    update_available: ["Update beschikbaar", "filled", "#c2680d"],
+    up_to_date: ["Up-to-date", "filled", "#0f6f6b"],
+    no_baseline: ["Geen versie ingesteld", "outline", null],
+    error: ["Check mislukt", "filled", "#dc2626"],
+  };
+
+  function versionKey(name) { return "svc:" + name; }
+
+  function compareVersions(a, b) {
+    const pa = a.split("."), pb = b.split(".");
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const sa = pa[i] ?? "0", sb = pb[i] ?? "0";
+      const na = parseInt(sa, 10), nb = parseInt(sb, 10);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      if (sa !== sb) return sa < sb ? -1 : 1;
+    }
+    return 0;
+  }
+
+  function statusFor(app, installed) {
+    if (app.error) return "error";
+    if (!installed) return "no_baseline";
+    return compareVersions(installed, app.latest_version) < 0 ? "update_available" : "up_to_date";
+  }
+
+  function handleUpdate(pageUrl, macUrl, winUrl) {
+    window.open(pageUrl, "_blank", "noopener");
+    const isMac = /Macintosh/.test(navigator.userAgent);
+    const fileUrl = isMac ? macUrl : winUrl;
+    if (fileUrl) {
+      const a = document.createElement("a");
+      a.href = fileUrl;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  }
+  window.handleUpdate = handleUpdate;
+
+  function renderBadge(status) {
+    const [label, variant, color] = STATUS_LABEL[status];
+    const style = variant === "filled" ? `background:${color};color:#fff;` : "";
+    return `<span class="badge ${variant}" style="${style}">${label}</span>`;
+  }
+
+  function renderRow(app) {
+    const installed = localStorage.getItem(versionKey(app.name)) || "";
+    const status = statusFor(app, installed);
+    const latest = app.latest_version || "—";
+    const errorHtml = app.error ? `<div class="error">${app.error}</div>` : "";
+    let action = "";
+    if (status === "update_available") {
+      const args = [app.check_url, app.download_mac || "", app.download_win || ""]
+        .map(v => JSON.stringify(v)).join(", ");
+      action = `<button class="update-btn" onclick='handleUpdate(${args})'>Updaten →</button>`;
+    }
+    return `
+      <tr data-app="${app.name}">
+        <td class="name"><a href="${app.check_url}" target="_blank" rel="noopener">${app.name}</a></td>
+        <td>
+          <input class="version-input" type="text" placeholder="bv. 1.2.3" value="${installed}"
+                 data-app="${app.name}">
+        </td>
+        <td>${latest}</td>
+        <td class="status-cell">${renderBadge(status)}${errorHtml}</td>
+        <td class="action-cell">${action}</td>
+      </tr>`;
+  }
+
+  function refreshRow(tr, app) {
+    const installed = localStorage.getItem(versionKey(app.name)) || "";
+    const status = statusFor(app, installed);
+    tr.querySelector(".status-cell").innerHTML = renderBadge(status) + (app.error ? `<div class="error">${app.error}</div>` : "");
+    let action = "";
+    if (status === "update_available") {
+      const args = [app.check_url, app.download_mac || "", app.download_win || ""]
+        .map(v => JSON.stringify(v)).join(", ");
+      action = `<button class="update-btn" onclick='handleUpdate(${args})'>Updaten →</button>`;
+    }
+    tr.querySelector(".action-cell").innerHTML = action;
+  }
+
+  async function init() {
+    let data;
+    try {
+      const res = await fetch("./latest.json", { cache: "no-store" });
+      data = await res.json();
+    } catch (e) {
+      document.getElementById("loading").textContent =
+        "Kon latest.json niet laden. Open deze pagina via de gehoste link, niet als lokaal bestand.";
+      return;
+    }
+
+    const checkedAt = new Date(data.checked_at);
+    document.getElementById("subtitle").textContent =
+      "Laatst gecontroleerd: " + checkedAt.toLocaleString("nl-BE");
+
+    const tbody = document.getElementById("app-rows");
+    tbody.innerHTML = data.apps.map(renderRow).join("");
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("app-table").style.display = "";
+
+    tbody.querySelectorAll(".version-input").forEach(input => {
+      input.addEventListener("input", () => {
+        const name = input.dataset.app;
+        const app = data.apps.find(a => a.name === name);
+        if (input.value.trim()) {
+          localStorage.setItem(versionKey(name), input.value.trim());
+        } else {
+          localStorage.removeItem(versionKey(name));
+        }
+        refreshRow(input.closest("tr"), app);
+      });
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

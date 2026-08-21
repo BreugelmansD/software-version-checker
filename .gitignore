@@ -1,6 +1,4 @@
 local_versions.json
-dashboard.html
-last_check.log
 launchd.log
 __pycache__/
 *.pyc

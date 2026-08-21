@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-21T09:28:06+00:00",
+  "checked_at": "2026-08-21T09:59:19+00:00",
   "apps": [
     {
       "name": "L-Acoustics Soundvision",
@@ -21,8 +21,8 @@
       "name": "Shure Wireless Workbench (WWB)",
       "check_url": "https://www.shure.com/nl-BE/producten/software/wwb?variant=WWB",
       "latest_version": "7.8.3",
-      "download_mac": null,
-      "download_win": null,
+      "download_mac": "https://www.shure.com/en-US/sw/wwb-mac",
+      "download_win": "https://www.shure.com/en-US/sw/wwb-win",
       "error": null
     },
     {

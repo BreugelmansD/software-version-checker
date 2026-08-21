@@ -84,8 +84,8 @@ def check_app(app):
         result["latest_version"] = extract(html, app["version_regex"])
         if result["latest_version"] is None:
             raise ValueError("version pattern not found on page")
-        result["download_mac"] = extract(html, app.get("mac_download_regex"))
-        result["download_win"] = extract(html, app.get("win_download_regex"))
+        result["download_mac"] = app.get("mac_download_static") or extract(html, app.get("mac_download_regex"))
+        result["download_win"] = app.get("win_download_static") or extract(html, app.get("win_download_regex"))
     except Exception as exc:  # noqa: BLE001 - surface any fetch/parse failure on the page
         result["error"] = str(exc)
     return result

@@ -19,7 +19,9 @@
       "check_url": "https://www.shure.com/nl-BE/producten/software/wwb?variant=WWB",
       "version_regex": "versionNumber\":\\{\"value\":\"([\\d.]+)\"",
       "mac_download_regex": null,
-      "win_download_regex": null
+      "win_download_regex": null,
+      "mac_download_static": "https://www.shure.com/en-US/sw/wwb-mac",
+      "win_download_static": "https://www.shure.com/en-US/sw/wwb-win"
     },
     {
       "name": "Green-GO Control",

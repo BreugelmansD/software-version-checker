@@ -1,64 +1,88 @@
 # Software Version Checker
 
-Toont of er een nieuwe versie is van software die geen in-app updater heeft
-(L-Acoustics Soundvision, L-Acoustics Network Manager, Shure Wireless Workbench,
-Green-GO Control).
+**English** · [Nederlands](#nederlands)
 
-## Voor collega's: gewoon de link openen
+Pro-audio and show-production software rarely updates itself. This page tells you
+at a glance whether the version you run is still the latest one, and starts the
+download for your system when it isn't.
+
+Currently tracked: L-Acoustics Soundvision, L-Acoustics Network Manager,
+Shure Wireless Workbench, Green-GO Control.
+
+## Use it
 
 **https://breugelmansd.github.io/software-version-checker/**
 
-Geen installatie, geen terminal, geen git nodig. Vul bij "Jouw versie" eenmalig
-in welke versie je nu hebt geïnstalleerd — dat wordt in je eigen browser
-onthouden (niet gedeeld met anderen). Zodra er een update beschikbaar is,
-klik je op **"Updaten →"**: dat opent de productpagina van de leverancier én
-start, waar mogelijk, meteen de download voor jouw besturingssysteem
-(macOS/Windows wordt automatisch herkend).
+No install, no account, no terminal. Type the version you have installed next to
+each application. It is remembered in your own browser only. When a newer version
+exists, the **Update** button opens the vendor page and starts the download for
+macOS or Windows (detected automatically). Phones get the vendor page only.
 
-De "laatste versie"-kolom wordt wekelijks automatisch vernieuwd door GitHub
-zelf — daarvoor moet niemand iets doen.
+The "latest version" column is refreshed automatically every Monday by a GitHub
+Action, so nobody has to maintain anything. If a vendor page can't be read one
+week, the last known version stays visible with a note.
 
-> **Let op — Soundvision:** de app zelf toont in het "About"-scherm een intern
-> buildnummer (bv. `3.19.1.2`) dat losstaat van het marketingversienummer op de
-> website (bv. `2026.3.1`). Gebruik de website als referentie voor "jouw versie",
-> niet het "About"-scherm.
+> **Soundvision:** the app's own About screen shows an internal build number
+> (for example `3.19.1.2`), not the release number on the website (for example
+> `2026.4`). Compare against the website's number.
+>
+> **Network Manager:** L-Acoustics only hands out this download after a form, so
+> the button opens the download page instead of starting the file.
 
-## Optioneel/geavanceerd: lokale desktop-melding
+## Add or fix software
 
-Wil je zelf ook automatisch een melding op je bureaublad krijgen (macOS/Windows)
-zodra er een update is, naast de gedeelde webpagina? Dat kan met hetzelfde
-script, lokaal:
+Open an [issue](https://github.com/BreugelmansD/software-version-checker/issues/new/choose)
+with the vendor's download page, or send a pull request that adds an entry to
+`apps.json`:
+
+| field | meaning |
+| --- | --- |
+| `name`, `check_url` | what to show and which page to read |
+| `version_regex` | matches the version number on that page (first capture group wins) |
+| `mac_download_regex`, `win_download_regex` | optional: find a direct file link on the same page |
+| `mac_download_static`, `win_download_static` | optional: a vendor link that always points to the latest file |
+
+Test locally with `python3 check_versions.py --ci` (Python 3.9+, no packages needed);
+it rewrites `latest.json`.
+
+## Optional: desktop notification
+
+If you also want a notification on your own computer, run the script locally:
 
 ```bash
 git clone https://github.com/BreugelmansD/software-version-checker.git
 cd software-version-checker
-python3 check_versions.py --setup     # eenmalig: jouw geïnstalleerde versies
+python3 check_versions.py --setup   # enter your installed versions once
+./setup_macos.sh                    # macOS: weekly check, Monday 09:00
+# Windows (PowerShell): ./setup_windows.ps1
 ```
 
-**macOS** — installeert een wekelijkse achtergrondcontrole (elke maandag 09:00):
-```bash
-./setup_macos.sh
-```
+## How it works
 
-**Windows** (PowerShell):
-```powershell
-./setup_windows.ps1
-```
+- `apps.json`: the shared catalogue of tracked software.
+- `.github/workflows/update-latest.yml`: weekly job that runs `check_versions.py --ci` and commits `latest.json`.
+- `index.html`: static page on GitHub Pages. It reads `latest.json` and compares it with the version you typed (stored in `localStorage`).
+- `local_versions.json`: only for the optional local notification; git-ignored.
 
-## Een applicatie toevoegen aan de catalogus
+Not affiliated with L-Acoustics, Shure or Green-GO. Licensed under MIT.
 
-Voeg een item toe aan `apps.json` met `name`, `check_url` en een `version_regex`
-die het versienummer op die pagina matcht (optioneel `mac_download_regex` /
-`win_download_regex` voor rechtstreekse downloads). Maak hiervoor een pull
-request zodat iedereen de nieuwe app op de gedeelde pagina ziet.
+---
 
-## Hoe het werkt
+## Nederlands
 
-- `apps.json` — gedeelde catalogus van te checken software (in git).
-- `.github/workflows/update-latest.yml` — GitHub Action die wekelijks
-  `check_versions.py --ci` draait en het resultaat opslaat in `latest.json`.
-- `index.html` — statische pagina (gehost via GitHub Pages) die `latest.json`
-  ophaalt en, samen met jouw versie uit `localStorage`, de status per app
-  berekent en toont.
-- `local_versions.json` — enkel voor de optionele lokale desktop-melding;
-  wordt niet gedeeld (staat in `.gitignore`).
+Software voor geluid en show heeft zelden een ingebouwde updater. Deze pagina toont
+in één oogopslag of jouw versie nog de laatste is, en start de download voor jouw
+systeem als dat niet zo is.
+
+**Gebruik:** open **https://breugelmansd.github.io/software-version-checker/**, vul
+naast elke applicatie de versie in die je hebt (enkel in jouw browser bewaard) en
+klik op **Updaten** als er een nieuwere versie is. De pagina opent de leverancier
+en start de download voor macOS of Windows. Geen installatie of account nodig.
+
+De laatste versies worden elke maandag automatisch vernieuwd. Ontbreekt er software
+of klopt iets niet? Maak een [issue](https://github.com/BreugelmansD/software-version-checker/issues/new/choose)
+aan of stuur een pull request die `apps.json` uitbreidt.
+
+Let op bij Soundvision: het About-scherm toont een intern buildnummer (bv. `3.19.1.2`),
+niet het versienummer van de website (bv. `2026.4`). Bij Network Manager vraagt
+L-Acoustics eerst een formulier, dus daar opent de knop enkel de downloadpagina.

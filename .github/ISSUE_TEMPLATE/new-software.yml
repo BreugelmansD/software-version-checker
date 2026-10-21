@@ -1,0 +1,23 @@
+name: Add software / Software toevoegen
+description: Suggest an application that should be tracked, or report a wrong result.
+labels: ["software"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Application name / Naam van de applicatie
+      placeholder: e.g. Shure Wireless Workbench
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Vendor download page / Downloadpagina van de leverancier
+      placeholder: https://…
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else / Opmerkingen
+      description: Wrong version shown, direct download link you know of, platform (macOS/Windows), …

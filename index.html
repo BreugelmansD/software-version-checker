@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,10 +17,15 @@
   body { margin:0; background:var(--bg); color:var(--text);
          font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
   .topbar { background:var(--brand); color:#fff; padding:16px 32px; display:flex;
-            align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+            align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; }
   .topbar h1 { font-size:18px; margin:0; font-weight:600; }
+  .topbar .right { display:flex; align-items:center; gap:14px; }
   .topbar .subtitle { font-size:12px; opacity:.85; }
+  .lang { background:transparent; color:#fff; border:1px solid rgba(255,255,255,.55); border-radius:999px;
+          padding:3px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .lang:hover { background:rgba(255,255,255,.15); }
   .content { max-width:1100px; margin:0 auto; padding:28px 24px 40px; }
+  .intro { font-size:14px; color:var(--muted); margin:0 0 18px; line-height:1.5; }
   table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border);
           border-radius:12px; overflow:hidden; }
   th, td { text-align:left; padding:12px 16px; font-size:14px; border-bottom:1px solid var(--border); vertical-align:middle; }
@@ -29,50 +34,111 @@
   tr:last-child td { border-bottom:none; }
   .name a { color:var(--text); text-decoration:none; font-weight:600; }
   .name a:hover { text-decoration:underline; }
-  .version-input { width:110px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
-                    font-size:13px; background:var(--card); color:var(--text); font-family:inherit; }
+  .version-input { width:120px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+                   font-size:13px; background:var(--card); color:var(--text); font-family:inherit; }
   .version-input:focus { outline:2px solid var(--brand); outline-offset:1px; }
   .badge { display:inline-block; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700;
            text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
   .badge.outline { background:transparent; color:var(--muted); border:1px solid var(--border); }
-  .error { color:#dc2626; font-size:11px; margin-top:4px; }
+  .note { color:var(--muted); font-size:11px; margin-top:4px; }
   .update-btn { display:inline-block; padding:6px 14px; border-radius:999px; background:var(--brand);
                 color:#fff; font-size:13px; font-weight:600; border:none; cursor:pointer; white-space:nowrap;
                 font-family:inherit; }
   .update-btn:hover { background:var(--brand-dark); }
-  .hint { font-size:11px; color:var(--muted); margin-top:2px; }
-  footer { margin-top:20px; color:var(--muted); font-size:12px; }
+  footer { margin-top:20px; color:var(--muted); font-size:12px; line-height:1.5; }
+  footer a { color:var(--brand); }
   .loading { padding:40px; text-align:center; color:var(--muted); }
+
+  /* Phones: one card per application instead of a clipped table */
+  @media (max-width:720px) {
+    .topbar { padding:14px 16px; }
+    .content { padding:18px 14px 32px; }
+    table, tbody { display:block; background:transparent; border:none; }
+    thead { display:none; }
+    tr { display:block; background:var(--card); border:1px solid var(--border); border-radius:12px;
+         margin-bottom:12px; padding:6px 0; }
+    td { display:flex; justify-content:space-between; align-items:center; gap:12px;
+         border-bottom:none; padding:8px 16px; }
+    td::before { content:attr(data-label); color:var(--muted); font-size:11px; font-weight:600;
+                 text-transform:uppercase; letter-spacing:.04em; }
+    td.name { font-size:15px; }
+    td.name::before, td.action-cell:empty { display:none; }
+    td.action-cell:empty { padding:0; }
+    td.action-cell { justify-content:flex-end; }
+    td.action-cell::before { display:none; }
+    .status-cell { text-align:right; }
+  }
 </style>
 </head>
 <body>
   <div class="topbar">
     <h1>Software Version Checker</h1>
-    <div class="subtitle" id="subtitle">Laden…</div>
+    <div class="right">
+      <span class="subtitle" id="subtitle"></span>
+      <button class="lang" id="lang-btn" type="button"></button>
+    </div>
   </div>
   <div class="content">
+    <p class="intro" id="intro"></p>
     <table id="app-table" style="display:none;">
       <thead>
-        <tr><th>Applicatie</th><th>Jouw versie</th><th>Laatste versie</th><th>Status</th><th></th></tr>
+        <tr><th id="th-app"></th><th id="th-yours"></th><th id="th-latest"></th><th id="th-status"></th><th></th></tr>
       </thead>
       <tbody id="app-rows"></tbody>
     </table>
-    <div class="loading" id="loading">Bezig met laden van de laatste versies…</div>
-    <footer>
-      Jouw versie wordt lokaal in je browser onthouden (niet gedeeld). De "laatste versie"-kolom wordt wekelijks
-      automatisch vernieuwd.
-    </footer>
+    <div class="loading" id="loading"></div>
+    <footer id="footer"></footer>
   </div>
 
 <script>
-  const STATUS_LABEL = {
-    update_available: ["Update beschikbaar", "filled", "#c2680d"],
-    up_to_date: ["Up-to-date", "filled", "#0f6f6b"],
-    no_baseline: ["Geen versie ingesteld", "outline", null],
-    error: ["Check mislukt", "filled", "#dc2626"],
+  const I18N = {
+    en: {
+      intro: "Enter the version you have installed. When a newer version is available you get an Update button that opens the vendor page and starts the download for your system (macOS or Windows).",
+      app: "Application", yours: "Your version", latest: "Latest version", status: "Status",
+      placeholder: "e.g. 1.2.3",
+      update: "Update →",
+      updateTitle: "Opens the vendor page and starts the download",
+      checked: "Last checked: ",
+      loading: "Loading the latest versions…",
+      loadFail: "Could not load latest.json. Open this page through its hosted link, not as a local file.",
+      stale: "Could not be refreshed – showing the last known version",
+      s_update: "Update available", s_ok: "Up to date", s_none: "Version not set", s_error: "Check failed",
+      footer: 'Your installed versions are stored only in this browser and are never shared. The latest versions are refreshed automatically every week. ' +
+              'Missing software or a wrong result? <a href="https://github.com/BreugelmansD/software-version-checker/issues" target="_blank" rel="noopener">Open an issue</a>.',
+      other: "NL",
+    },
+    nl: {
+      intro: "Vul de versie in die je hebt geïnstalleerd. Is er een nieuwere versie, dan krijg je een Update-knop die de pagina van de leverancier opent en de download voor jouw systeem (macOS of Windows) start.",
+      app: "Applicatie", yours: "Jouw versie", latest: "Laatste versie", status: "Status",
+      placeholder: "bv. 1.2.3",
+      update: "Updaten →",
+      updateTitle: "Opent de pagina van de leverancier en start de download",
+      checked: "Laatst gecontroleerd: ",
+      loading: "Bezig met laden van de laatste versies…",
+      loadFail: "Kon latest.json niet laden. Open deze pagina via de gehoste link, niet als lokaal bestand.",
+      stale: "Kon niet vernieuwd worden – laatst bekende versie getoond",
+      s_update: "Update beschikbaar", s_ok: "Up-to-date", s_none: "Geen versie ingesteld", s_error: "Check mislukt",
+      footer: 'Jouw geïnstalleerde versies blijven enkel in deze browser en worden nooit gedeeld. De laatste versies worden elke week automatisch vernieuwd. ' +
+              'Software die ontbreekt of een foutief resultaat? <a href="https://github.com/BreugelmansD/software-version-checker/issues" target="_blank" rel="noopener">Maak een issue aan</a>.',
+      other: "EN",
+    },
+  };
+  const STATUS = {
+    update_available: ["s_update", "filled", "#c2680d"],
+    up_to_date: ["s_ok", "filled", "#0f6f6b"],
+    no_baseline: ["s_none", "outline", null],
+    error: ["s_error", "filled", "#dc2626"],
   };
 
-  function versionKey(name) { return "svc:" + name; }
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function safeDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  let lang = safeGet("svc:lang") || ((navigator.language || "en").toLowerCase().startsWith("nl") ? "nl" : "en");
+  let data = null;
+  const t = k => I18N[lang][k];
+  const versionKey = name => "svc:" + name;
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
   function compareVersions(a, b) {
     const pa = a.split("."), pb = b.split(".");
@@ -81,21 +147,23 @@
       const sa = pa[i] ?? "0", sb = pb[i] ?? "0";
       const na = parseInt(sa, 10), nb = parseInt(sb, 10);
       if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
-      if (sa !== sb) return sa < sb ? -1 : 1;
+      if (isNaN(na) || isNaN(nb)) { if (sa !== sb) return sa < sb ? -1 : 1; }
     }
     return 0;
   }
 
   function statusFor(app, installed) {
-    if (app.error) return "error";
+    if (!app.latest_version) return "error";
     if (!installed) return "no_baseline";
     return compareVersions(installed, app.latest_version) < 0 ? "update_available" : "up_to_date";
   }
 
   function handleUpdate(pageUrl, macUrl, winUrl) {
     window.open(pageUrl, "_blank", "noopener");
-    const isMac = /Macintosh/.test(navigator.userAgent);
-    const fileUrl = isMac ? macUrl : winUrl;
+    // Only start a download on a desktop macOS/Windows machine; phones and Linux just get the vendor page.
+    const ua = navigator.userAgent;
+    const mobile = /iPhone|iPad|iPod|Android|Mobile/.test(ua);
+    const fileUrl = mobile ? "" : /Macintosh|Mac OS X/.test(ua) ? macUrl : /Windows/.test(ua) ? winUrl : "";
     if (fileUrl) {
       const a = document.createElement("a");
       a.href = fileUrl;
@@ -105,83 +173,94 @@
       a.remove();
     }
   }
-  window.handleUpdate = handleUpdate;
 
-  function renderBadge(status) {
-    const [label, variant, color] = STATUS_LABEL[status];
+  function statusHtml(app, status) {
+    const [key, variant, color] = STATUS[status];
     const style = variant === "filled" ? `background:${color};color:#fff;` : "";
-    return `<span class="badge ${variant}" style="${style}">${label}</span>`;
+    let html = `<span class="badge ${variant}" style="${style}">${esc(t(key))}</span>`;
+    if (app.error && app.latest_version) html += `<div class="note" title="${esc(app.error)}">${esc(t("stale"))}</div>`;
+    else if (app.error) html += `<div class="note">${esc(app.error)}</div>`;
+    return html;
+  }
+
+  function actionHtml(app, status) {
+    if (status !== "update_available") return "";
+    const args = [app.check_url, app.download_mac || "", app.download_win || ""].map(v => JSON.stringify(v)).join(", ");
+    return `<button class="update-btn" title="${esc(t("updateTitle"))}" onclick='handleUpdate(${esc(args)})'>${esc(t("update"))}</button>`;
   }
 
   function renderRow(app) {
-    const installed = localStorage.getItem(versionKey(app.name)) || "";
+    const installed = safeGet(versionKey(app.name)) || "";
     const status = statusFor(app, installed);
-    const latest = app.latest_version || "—";
-    const errorHtml = app.error ? `<div class="error">${app.error}</div>` : "";
-    let action = "";
-    if (status === "update_available") {
-      const args = [app.check_url, app.download_mac || "", app.download_win || ""]
-        .map(v => JSON.stringify(v)).join(", ");
-      action = `<button class="update-btn" onclick='handleUpdate(${args})'>Updaten →</button>`;
-    }
     return `
-      <tr data-app="${app.name}">
-        <td class="name"><a href="${app.check_url}" target="_blank" rel="noopener">${app.name}</a></td>
-        <td>
-          <input class="version-input" type="text" placeholder="bv. 1.2.3" value="${installed}"
-                 data-app="${app.name}">
-        </td>
-        <td>${latest}</td>
-        <td class="status-cell">${renderBadge(status)}${errorHtml}</td>
-        <td class="action-cell">${action}</td>
+      <tr data-app="${esc(app.name)}">
+        <td class="name" data-label="${esc(t("app"))}"><a href="${esc(app.check_url)}" target="_blank" rel="noopener">${esc(app.name)}</a></td>
+        <td data-label="${esc(t("yours"))}"><input class="version-input" type="text" inputmode="decimal" autocomplete="off"
+            placeholder="${esc(t("placeholder"))}" value="${esc(installed)}" data-app="${esc(app.name)}"
+            aria-label="${esc(t("yours"))} – ${esc(app.name)}"></td>
+        <td data-label="${esc(t("latest"))}">${esc(app.latest_version || "—")}</td>
+        <td class="status-cell" data-label="${esc(t("status"))}">${statusHtml(app, status)}</td>
+        <td class="action-cell">${actionHtml(app, status)}</td>
       </tr>`;
   }
 
   function refreshRow(tr, app) {
-    const installed = localStorage.getItem(versionKey(app.name)) || "";
+    const installed = safeGet(versionKey(app.name)) || "";
     const status = statusFor(app, installed);
-    tr.querySelector(".status-cell").innerHTML = renderBadge(status) + (app.error ? `<div class="error">${app.error}</div>` : "");
-    let action = "";
-    if (status === "update_available") {
-      const args = [app.check_url, app.download_mac || "", app.download_win || ""]
-        .map(v => JSON.stringify(v)).join(", ");
-      action = `<button class="update-btn" onclick='handleUpdate(${args})'>Updaten →</button>`;
-    }
-    tr.querySelector(".action-cell").innerHTML = action;
+    tr.querySelector(".status-cell").innerHTML = statusHtml(app, status);
+    tr.querySelector(".action-cell").innerHTML = actionHtml(app, status);
   }
 
-  async function init() {
-    let data;
-    try {
-      const res = await fetch("./latest.json", { cache: "no-store" });
-      data = await res.json();
-    } catch (e) {
-      document.getElementById("loading").textContent =
-        "Kon latest.json niet laden. Open deze pagina via de gehoste link, niet als lokaal bestand.";
-      return;
+  function renderStatic() {
+    document.documentElement.lang = lang;
+    document.getElementById("intro").textContent = t("intro");
+    document.getElementById("th-app").textContent = t("app");
+    document.getElementById("th-yours").textContent = t("yours");
+    document.getElementById("th-latest").textContent = t("latest");
+    document.getElementById("th-status").textContent = t("status");
+    document.getElementById("footer").innerHTML = t("footer");
+    document.getElementById("lang-btn").textContent = t("other");
+    document.getElementById("loading").textContent = t("loading");
+    if (data) {
+      const when = new Date(data.checked_at).toLocaleString(lang === "nl" ? "nl-BE" : "en-GB");
+      document.getElementById("subtitle").textContent = t("checked") + when;
     }
+  }
 
-    const checkedAt = new Date(data.checked_at);
-    document.getElementById("subtitle").textContent =
-      "Laatst gecontroleerd: " + checkedAt.toLocaleString("nl-BE");
-
+  function renderTable() {
     const tbody = document.getElementById("app-rows");
     tbody.innerHTML = data.apps.map(renderRow).join("");
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("app-table").style.display = "";
-
     tbody.querySelectorAll(".version-input").forEach(input => {
       input.addEventListener("input", () => {
-        const name = input.dataset.app;
-        const app = data.apps.find(a => a.name === name);
-        if (input.value.trim()) {
-          localStorage.setItem(versionKey(name), input.value.trim());
-        } else {
-          localStorage.removeItem(versionKey(name));
-        }
+        const app = data.apps.find(a => a.name === input.dataset.app);
+        const v = input.value.trim();
+        if (v) safeSet(versionKey(app.name), v); else safeDel(versionKey(app.name));
         refreshRow(input.closest("tr"), app);
       });
     });
+  }
+
+  document.getElementById("lang-btn").addEventListener("click", () => {
+    lang = lang === "nl" ? "en" : "nl";
+    safeSet("svc:lang", lang);
+    renderStatic();
+    if (data) renderTable();
+  });
+
+  async function init() {
+    renderStatic();
+    try {
+      const res = await fetch("./latest.json", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+      data = await res.json();
+    } catch (e) {
+      document.getElementById("loading").textContent = t("loadFail");
+      return;
+    }
+    renderStatic();
+    renderTable();
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("app-table").style.display = "";
   }
 
   init();

@@ -52,7 +52,10 @@ def save_local_versions(versions):
 
 
 def version_tuple(version_str):
-    return tuple(int(part) if part.isdigit() else part for part in version_str.split("."))
+    parts = [int(part) if part.isdigit() else part for part in version_str.split(".")]
+    while len(parts) < 4:  # "2026.4" must equal "2026.4.0", not sort below it
+        parts.append(0)
+    return tuple(parts)
 
 
 def fetch_html(url):
@@ -70,7 +73,17 @@ def extract(html, pattern):
     return match.group(1) if match.groups() else match.group(0)
 
 
-def check_app(app):
+def load_previous():
+    """Last published results by app name, used as fallback when a check fails."""
+    if not LATEST_PATH.exists():
+        return {}
+    try:
+        return {a["name"]: a for a in json.loads(LATEST_PATH.read_text())["apps"]}
+    except (ValueError, KeyError):
+        return {}
+
+
+def check_app(app, previous=None):
     result = {
         "name": app["name"],
         "check_url": app["check_url"],
@@ -88,6 +101,10 @@ def check_app(app):
         result["download_win"] = app.get("win_download_static") or extract(html, app.get("win_download_regex"))
     except Exception as exc:  # noqa: BLE001 - surface any fetch/parse failure on the page
         result["error"] = str(exc)
+        if previous and previous.get("latest_version"):
+            # Keep showing the last known good data instead of an empty row.
+            for key in ("latest_version", "download_mac", "download_win"):
+                result[key] = previous.get(key)
     return result
 
 
@@ -159,7 +176,8 @@ def main():
         return run_set(name, version)
 
     apps = load_apps()
-    results = [check_app(app) for app in apps]
+    previous = load_previous()
+    results = [check_app(app, previous.get(app["name"])) for app in apps]
     checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     LATEST_PATH.write_text(json.dumps({"checked_at": checked_at, "apps": results}, indent=2) + "\n")

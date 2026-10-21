@@ -1,13 +1,13 @@
 {
-  "checked_at": "2026-10-19T15:24:04+00:00",
+  "checked_at": "2026-10-21T11:40:49+00:00",
   "apps": [
     {
       "name": "L-Acoustics Soundvision",
       "check_url": "https://www.l-acoustics.com/software/soundvision",
-      "latest_version": null,
-      "download_mac": null,
-      "download_win": null,
-      "error": "version pattern not found on page"
+      "latest_version": "2026.4",
+      "download_mac": "https://prdstglaxxwe001.blob.core.windows.net/webapp-lacoustics/documentation/SOFTWARE/Soundvision/Soundvision/Mac/2026.4/Soundvision_2026.4_Oct_2026_MAC.zip",
+      "download_win": "https://prdstglaxxwe001.blob.core.windows.net/webapp-lacoustics/documentation/SOFTWARE/Soundvision/Soundvision/Windows/2026.4/Soundvision_2026.4_Oct_2026_WIN.zip",
+      "error": null
     },
     {
       "name": "L-Acoustics Network Manager",
